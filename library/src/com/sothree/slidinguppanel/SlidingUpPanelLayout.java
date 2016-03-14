@@ -191,7 +191,6 @@ public class SlidingUpPanelLayout extends ViewGroup {
      * An anchor point where the panel can stop during sliding
      */
     private float mAnchorPoint = 1.f;
-
     /**
      * A panel view is locked into internal scrolling or another condition that
      * is preventing a drag.
@@ -207,7 +206,7 @@ public class SlidingUpPanelLayout extends ViewGroup {
     private float mInitialMotionX;
     private float mInitialMotionY;
     private boolean mIsScrollableViewHandlingTouch = false;
-
+    private  boolean isDraging = false;
     private PanelSlideListener mPanelSlideListener;
 
     private final ViewDragHelper mDragHelper;
@@ -587,6 +586,17 @@ public class SlidingUpPanelLayout extends ViewGroup {
     }
 
     /**
+     * Set new anchor point to the {@link SlidingUpPanelLayout}.
+     *
+     * @param pixelFromBottom : the number of pixels from panel's bottom.
+     */
+    public void setAnchorPointBottomDistance(int pixelFromBottom) {
+        int height = mSlideRange;
+        float anchorDistance = pixelFromBottom;
+        mAnchorPoint = anchorDistance / height;
+    }
+
+    /**
      * Gets the currently set anchor point
      *
      * @return the currently set anchor point
@@ -879,6 +889,7 @@ public class SlidingUpPanelLayout extends ViewGroup {
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
+//        if(true) return super.onInterceptTouchEvent(ev);
         // If the scrollable view is handling touch, never intercept
         if (mIsScrollableViewHandlingTouch) {
             mDragHelper.cancel();
@@ -894,6 +905,11 @@ public class SlidingUpPanelLayout extends ViewGroup {
                 mIsUnableToDrag = false;
                 mInitialMotionX = x;
                 mInitialMotionY = y;
+                if(isViewUnder(mDragView, (int) mInitialMotionX, (int) mInitialMotionY))
+                    isDraging = true;
+                else{
+                    isDraging = false;
+                }
                 break;
             }
 
@@ -915,17 +931,26 @@ public class SlidingUpPanelLayout extends ViewGroup {
                 // If the dragView is still dragging when we get here, we need to call processTouchEvent
                 // so that the view is settled
                 // Added to make scrollable views work (tokudu)
+                isDraging = false;
                 if (mDragHelper.isDragging()) {
                     mDragHelper.processTouchEvent(ev);
                     return true;
                 }
                 break;
         }
-        return mDragHelper.shouldInterceptTouchEvent(ev);
+        if (isViewUnder(mDragView, (int) mInitialMotionX, (int) mInitialMotionY))
+            return mDragHelper.shouldInterceptTouchEvent(ev);
+        else {
+            return super.onInterceptTouchEvent(ev);
+        }
     }
 
     @Override
     public boolean onTouchEvent(@NonNull MotionEvent ev) {
+
+        if(isDraging == false) {
+            return super.onTouchEvent(ev);
+        }
         if (!isEnabled() || !isTouchEnabled()) {
             return super.onTouchEvent(ev);
         }
@@ -1051,7 +1076,7 @@ public class SlidingUpPanelLayout extends ViewGroup {
                 // Approximate the scroll position based on the bottom child and the last visible item
                 return (lv.getAdapter().getCount() - lv.getLastVisiblePosition() - 1) * lastChild.getHeight() + lastChild.getBottom() - lv.getBottom();
             }
-        }else if (mScrollableView instanceof RecyclerView && ((RecyclerView) mScrollableView).getChildCount() > 0) {
+        } else if (mScrollableView instanceof RecyclerView && ((RecyclerView) mScrollableView).getChildCount() > 0) {
             RecyclerView rv = ((RecyclerView) mScrollableView);
             if (rv.getAdapter() == null) return 0;
             if (mIsSlidingUp) {
@@ -1101,6 +1126,16 @@ public class SlidingUpPanelLayout extends ViewGroup {
      */
     public PanelState getPanelState() {
         return mSlideState;
+    }
+
+    public void smoothSlideToAnchorPoint() {
+        if (!isEnabled() || mSlideState == PanelState.DRAGGING) return;
+
+        if (mSlideState == PanelState.HIDDEN) {
+            mSlideableView.setVisibility(View.VISIBLE);
+            requestLayout();
+        }
+        smoothSlideTo(mAnchorPoint, 0);
     }
 
     /**
